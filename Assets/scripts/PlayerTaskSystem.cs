@@ -1,5 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
+using System.Collections.Generic;
+using UnityEngine.SceneManagement;
 
 [RequireComponent(typeof(PlayerController))]
 public class PlayerTaskSystem : MonoBehaviour
@@ -23,7 +25,33 @@ public class PlayerTaskSystem : MonoBehaviour
     [Header("Puzzle Settings")]
     public GameObject gameElectricPanel;
     public ButtonPuzzleManager puzzleManager;
+    public float panelHideDelay = 3f;
 
+    [Header("Completion Effects")]
+    public Light completionLight;
+    public GameObject doorToHide;
+    public ParticleSystem completionEffect;
+
+     [Header("Dialogue Settings")]
+    public GameObject alienNPC;
+    public Transform doorLookTarget;
+    public float rotationSpeed = 1f;
+    public DialogueSystem dialogueSystem;
+    
+    [System.Serializable]
+    public class NPCDialogue
+    {
+        public string text;
+        public float displayTime = 3f;
+    }
+    
+    public List<NPCDialogue> completionDialogue = new List<NPCDialogue>()
+    {
+        new NPCDialogue { text = "Поздравляю, ты наладил электропитание!", displayTime = 3f },
+        new NPCDialogue { text = "Теперь у нас есть доступ в другие отсеки корабля, но тебе нужно поторопиться...", displayTime = 2.5f },
+        new NPCDialogue { text = "Системы жизнеобеспечения повреждены, кислорода в этом секторе становится всё меньше.", displayTime = 3.5f },
+        new NPCDialogue { text = "Используй терминал в следующем отсеке, чтобы стабилизировать ситуацию.", displayTime = 4f }
+    };
 
     [Header("References")]
     public PlayerController playerController;
@@ -34,6 +62,11 @@ public class PlayerTaskSystem : MonoBehaviour
     private bool hasScheme;
     private bool isPuzzleActive;
     private AudioSource audioSource;
+    private float panelHideTimer;
+    private bool isCompletingSequence;
+    private bool isRotatingToDoor;
+    private Quaternion targetRotation;
+    private bool hasStartedDialogue;
 
     void Start()
     {
@@ -49,14 +82,84 @@ public class PlayerTaskSystem : MonoBehaviour
             gameElectricPanel.SetActive(false);
         }
 
+        if (completionLight != null) completionLight.enabled = false;
+        if (doorToHide != null) doorToHide.SetActive(true);
+        if (alienNPC != null) alienNPC.SetActive(false);
+
         UpdateTaskUI();
     }
 
     void Update()
     {
+        if (isCompletingSequence)
+        {
+            HandleCompletionSequence();
+            return;
+        }
+
+        // Обработка таймера скрытия панели
+        if (panelHideTimer > 0)
+        {
+            panelHideTimer -= Time.deltaTime;
+            if (panelHideTimer <= 0)
+            {
+                HideElectricPanel();
+            }
+        }
+
         if (isInteracting || isPuzzleActive) return;
 
         CheckTaskCompletion();
+    }
+
+    private void HandleCompletionSequence()
+    {
+        if (isRotatingToDoor)
+        {
+            transform.rotation = Quaternion.Slerp(
+                transform.rotation, 
+                targetRotation, 
+                rotationSpeed * Time.deltaTime
+            );
+
+            if (Quaternion.Angle(transform.rotation, targetRotation) < 1f)
+            {
+                isRotatingToDoor = false;
+                StartDialogue();
+            }
+        }
+    }
+
+    private void StartDialogue()
+    {
+        if (alienNPC != null)
+        {
+            alienNPC.SetActive(true);
+            Animator npcAnimator = alienNPC.GetComponent<Animator>();
+            if (npcAnimator != null)
+            {
+                npcAnimator.SetTrigger("Appear");
+            }
+        }
+
+        if (dialogueSystem != null && completionDialogue.Count > 0 && !hasStartedDialogue)
+        {
+            dialogueSystem.StartDialogue(ConvertDialogueToSystemFormat());
+            hasStartedDialogue = true;
+        }
+    }
+
+    private List<DialogueSystem.DialogueLine> ConvertDialogueToSystemFormat()
+    {
+        List<DialogueSystem.DialogueLine> converted = new List<DialogueSystem.DialogueLine>();
+        foreach (NPCDialogue dialogue in completionDialogue)
+        {
+            DialogueSystem.DialogueLine line = new DialogueSystem.DialogueLine();
+            // Предполагаем, что DialogueLine содержит только текст
+            line.text = dialogue.text;
+            converted.Add(line);
+        }
+        return converted;
     }
 
     private void CheckTaskCompletion()
@@ -87,13 +190,8 @@ public class PlayerTaskSystem : MonoBehaviour
     }
 
     private void StartElectricPuzzle()
-{
-    if (puzzleManager == null)
     {
-        Debug.LogError("PuzzleManager не назначен!");
-        return;
-    }
-        if (playerController == null || gameElectricPanel == null || puzzleManager == null)
+        if (puzzleManager == null || playerController == null || gameElectricPanel == null)
         {
             Debug.LogError("Missing required puzzle components!");
             return;
@@ -110,18 +208,44 @@ public class PlayerTaskSystem : MonoBehaviour
 
     private void HandlePuzzleComplete()
     {
-        CompletePuzzle();
-    }
-
-    private void CompletePuzzle()
-    {
         puzzleManager.OnPuzzleCompleted.RemoveListener(HandlePuzzleComplete);
-        gameElectricPanel.SetActive(false);
         
         playerController.EnableControls();
         isPuzzleActive = false;
         
         CompleteCurrentTask();
+        
+        panelHideTimer = panelHideDelay;
+    }
+
+    private void HideElectricPanel()
+    {
+        if (gameElectricPanel != null)
+        {
+            gameElectricPanel.SetActive(false);
+        }
+        
+        ActivateCompletionEffects();
+        StartCompletionSequence();
+    }
+
+    private void ActivateCompletionEffects()
+    {
+        if (completionLight != null) completionLight.enabled = true;
+        if (doorToHide != null) doorToHide.SetActive(false);
+        if (completionEffect != null) completionEffect.Play();
+    }
+
+    private void StartCompletionSequence()
+    {
+        isCompletingSequence = true;
+        playerController.enabled = false;
+        
+        Vector3 directionToDoor = doorLookTarget.position - transform.position;
+        directionToDoor.y = 0;
+        targetRotation = Quaternion.LookRotation(directionToDoor);
+        isRotatingToDoor = true;
+        hasStartedDialogue = false;
     }
 
     private bool CheckProximity(Vector3 targetPosition)
@@ -155,19 +279,6 @@ public class PlayerTaskSystem : MonoBehaviour
         }
 
         CompleteCurrentTask();
-    }
-
-    private void PlayEffect(ParticleSystem effect, AudioClip sound, Vector3 position)
-    {
-        if (effect != null)
-        {
-            Instantiate(effect, position, Quaternion.identity);
-        }
-
-        if (sound != null && audioSource != null)
-        {
-            audioSource.PlayOneShot(sound);
-        }
     }
 
     private void CompleteCurrentTask()

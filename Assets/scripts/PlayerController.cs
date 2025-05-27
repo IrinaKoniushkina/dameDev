@@ -6,6 +6,7 @@ public class PlayerController : MonoBehaviour
     // Компоненты
     private Animator anim;
     private CharacterController controller;
+    public AudioSource moveSound;
     
     // Настройки движения
     [Header("Movement Settings")]
@@ -13,6 +14,7 @@ public class PlayerController : MonoBehaviour
     public float runSpeed = 6f;
     public float rotationSpeed = 10f;
     public float gravity = 180f;
+    public float stepRate = 0.5f; // Интервал между шагами
 
     // Параметры анимаций
     [Header("Animation Parameters")]
@@ -27,6 +29,8 @@ public class PlayerController : MonoBehaviour
     private bool isRunning;
     private bool controlsEnabled = true;
     private bool isInteracting;
+    private float nextStepTime;
+    private bool wasMoving;
 
     void Start() 
     {
@@ -36,9 +40,12 @@ public class PlayerController : MonoBehaviour
 
         Debug.Assert(controller != null, "CharacterController not found!");
         Debug.Assert(anim != null, "Animator not found!");
+        Debug.Assert(moveSound != null, "MoveSound AudioSource not assigned!");
 
         currentSpeed = walkSpeed;
         EnableControls();
+        nextStepTime = 0f;
+        wasMoving = false;
     }
 
     void Update()
@@ -48,11 +55,13 @@ public class PlayerController : MonoBehaviour
         if (!isInteracting)
         {
             HandleMovement();
+            HandleFootsteps();
         }
         else
         {
             // Блокировка движения во время взаимодействия
             moveDirection = Vector3.zero;
+            wasMoving = false;
         }
 
         // Всегда применяем гравитацию
@@ -89,6 +98,43 @@ public class PlayerController : MonoBehaviour
         bool isMoving = vertical != 0;
         anim.SetBool(walkParam, isMoving);
         anim.SetBool(runParam, isRunning && isMoving);
+    }
+
+    private void HandleFootsteps()
+    {
+        bool isMoving = moveDirection != Vector3.zero;
+
+        if (isMoving)
+        {
+            if (!wasMoving)
+            {
+                // Начинаем движение - проигрываем первый шаг
+                PlayStepSound();
+                nextStepTime = Time.time + stepRate;
+                wasMoving = true;
+            }
+            else if (Time.time >= nextStepTime)
+            {
+                // Проигрываем следующий шаг
+                PlayStepSound();
+                nextStepTime = Time.time + stepRate;
+            }
+        }
+        else
+        {
+            wasMoving = false;
+        }
+    }
+
+    private void PlayStepSound()
+    {
+        if (moveSound != null && !moveSound.isPlaying)
+        {
+            // Настраиваем звук в зависимости от скорости
+            moveSound.pitch = isRunning ? 1.2f : 1f;
+            moveSound.volume = isRunning ? 0.8f : 0.6f;
+            moveSound.Play();
+        }
     }
 
     private void ApplyGravity()

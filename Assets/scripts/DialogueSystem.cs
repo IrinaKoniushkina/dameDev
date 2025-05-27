@@ -2,6 +2,8 @@ using UnityEngine;
 using UnityEngine.UI;
 using System.Collections;
 using System.Collections.Generic;
+using UnityEngine.SceneManagement;
+
 
 public class DialogueSystem : MonoBehaviour
 {
@@ -122,7 +124,7 @@ public class DialogueSystem : MonoBehaviour
         DisplayCurrentLine();
     }
 
-        public void EndDialogue()
+    public void EndDialogue()
     {
         dialoguePanel.SetActive(false);
         shouldNPCLookAtPlayer = true;
@@ -174,7 +176,8 @@ public class DialogueSystem : MonoBehaviour
         };
     }
     public bool IsDialogueActive()
-{
-    return dialoguePanel.activeSelf;
-}
+    {
+        return dialoguePanel.activeSelf;
+    }
+
 }

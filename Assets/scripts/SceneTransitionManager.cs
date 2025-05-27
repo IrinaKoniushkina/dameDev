@@ -32,12 +32,13 @@ public class SceneTransitionManager : MonoBehaviour
     void Start()
     {
         InitializeReferences();
-        
+
         initialRotation = player.transform.rotation;
         currentState = TransitionState.FadingIn;
         fadeImage.color = Color.black;
         fadeImage.gameObject.SetActive(true);
         playerController.DisableControls();
+        npcTransform.gameObject.SetActive(true);
     }
 
     void InitializeReferences()
@@ -153,6 +154,8 @@ public class SceneTransitionManager : MonoBehaviour
             currentState = TransitionState.RotatingLeft;
         }
     }
+
+
 
     void CompleteTransition()
     {
